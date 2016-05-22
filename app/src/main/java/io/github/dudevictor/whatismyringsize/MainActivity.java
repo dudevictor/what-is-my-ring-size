@@ -1,8 +1,11 @@
 package io.github.dudevictor.whatismyringsize;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.Snackbar;
+import android.util.Log;
+import android.view.SurfaceView;
 import android.view.View;
 import android.support.design.widget.NavigationView;
 import android.support.v4.view.GravityCompat;
@@ -13,8 +16,15 @@ import android.support.v7.widget.Toolbar;
 import android.view.Menu;
 import android.view.MenuItem;
 
+import org.opencv.android.BaseLoaderCallback;
+import org.opencv.android.CameraBridgeViewBase;
+import org.opencv.android.OpenCVLoader;
+import org.opencv.core.Mat;
+import org.opencv.imgproc.Imgproc;
+
 public class MainActivity extends AppCompatActivity
-        implements NavigationView.OnNavigationItemSelectedListener {
+        implements NavigationView.OnNavigationItemSelectedListener{
+
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -24,11 +34,13 @@ public class MainActivity extends AppCompatActivity
         setSupportActionBar(toolbar);
 
         FloatingActionButton fab = (FloatingActionButton) findViewById(R.id.fab);
+
+
         fab.setOnClickListener(new View.OnClickListener() {
             @Override
             public void onClick(View view) {
-                Snackbar.make(view, "Replace with your own action", Snackbar.LENGTH_LONG)
-                        .setAction("Action", null).show();
+                Intent myIntent = new Intent(MainActivity.this, CameraActivity.class);
+                MainActivity.this.startActivity(myIntent);
             }
         });
 
@@ -98,4 +110,6 @@ public class MainActivity extends AppCompatActivity
         drawer.closeDrawer(GravityCompat.START);
         return true;
     }
+
+
 }
