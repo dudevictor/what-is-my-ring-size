@@ -1,4 +1,4 @@
-package io.github.dudevictor.whatismyringsize;
+package io.github.dudevictor.whatismyringsize.activity;
 
 import android.support.v7.app.AppCompatActivity;
 import android.os.Bundle;
@@ -10,6 +10,7 @@ import org.opencv.android.CameraBridgeViewBase;
 import org.opencv.android.OpenCVLoader;
 import org.opencv.core.Mat;
 import org.opencv.imgproc.Imgproc;
+
 
 public class CameraActivity extends AppCompatActivity
         implements CameraBridgeViewBase.CvCameraViewListener2 {

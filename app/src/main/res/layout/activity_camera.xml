@@ -4,7 +4,7 @@
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     xmlns:opencv="http://schemas.android.com/apk/res-auto"
-    tools:context="io.github.dudevictor.whatismyringsize.CameraActivity">
+    tools:context=".activity.CameraActivity">
 
     <org.opencv.android.JavaCameraView
         android:layout_width="match_parent"

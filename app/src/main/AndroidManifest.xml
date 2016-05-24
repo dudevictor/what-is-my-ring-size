@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <manifest xmlns:android="http://schemas.android.com/apk/res/android"
-    package="io.github.dudevictor.whatismyringsize">
+    package="io.github.dudevictor.whatismyringsize.activity">
 
     <uses-sdk
         android:minSdkVersion="21"
