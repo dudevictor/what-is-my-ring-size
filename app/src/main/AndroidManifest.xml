@@ -10,17 +10,13 @@
 
     <uses-feature
         android:name="android.hardware.camera"
-        android:required="false" />
+        android:required="true" />
     <uses-feature
         android:name="android.hardware.camera.autofocus"
-        android:required="false" />
+        android:required="true" />
     <uses-feature
         android:name="android.hardware.camera.front"
-        android:required="false" />
-    <uses-feature
-        android:name="android.hardware.camera.front.autofocus"
-        android:required="false" />
-
+        android:required="true" />
 
     <application
         android:allowBackup="true"
@@ -29,6 +25,7 @@
         android:supportsRtl="true"
         android:theme="@style/AppTheme">
         <uses-permission android:name="android.permission.CAMERA" />
+
         <android:uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" />
         <android:uses-permission android:name="android.permission.READ_PHONE_STATE" />
         <android:uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
@@ -45,7 +42,8 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <activity android:name=".CameraActivity"></activity>
+        <activity android:name=".CameraActivity" />
+        <activity android:name=".PictureShowActivity"></activity>
     </application>
 
 </manifest>
