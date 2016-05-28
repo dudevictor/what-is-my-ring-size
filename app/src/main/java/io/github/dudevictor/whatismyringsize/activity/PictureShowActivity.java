@@ -31,18 +31,12 @@ public class PictureShowActivity extends AppCompatActivity implements
         @Override
         public void onManagerConnected(int status) {
             super.onManagerConnected(status);
-            Bitmap bitmap;
-            if (PictureShowActivity.this.getIntent().getExtras().get("imageUri") == null) {
-                bitmap = (Bitmap) getIntent().getExtras().get("image");
-                imgView.setImageBitmap(bitmap);
 
-            } else {
-                Uri selectedImage = (Uri) getIntent().getExtras().get("imageUri");
-                bitmap = ImageLoaderUtil.getDownsampledBitmap(selectedImage,
-                        imgView.getWidth(), imgView.getHeight(), getContentResolver());
-                imgView.setImageBitmap(bitmap);
+            Uri selectedImage = (Uri) getIntent().getExtras().get("imageUri");
+            Bitmap bitmap = ImageLoaderUtil.getDownsampledBitmap(selectedImage,
+                    imgView.getWidth(), imgView.getHeight(), getContentResolver());
+            imgView.setImageBitmap(bitmap);
 
-            }
 
             Bitmap bmp32 = bitmap.copy(Bitmap.Config.ARGB_8888, true);
             originalImage = new Mat();

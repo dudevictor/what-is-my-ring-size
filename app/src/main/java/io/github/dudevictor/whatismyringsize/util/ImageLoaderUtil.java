@@ -3,6 +3,7 @@ package io.github.dudevictor.whatismyringsize.util;
 import android.content.ContentResolver;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
+import android.graphics.Matrix;
 import android.net.Uri;
 
 import java.io.IOException;
@@ -23,10 +24,13 @@ public class ImageLoaderUtil {
         try {
             BitmapFactory.Options outDimens = getBitmapDimensions(uri, contentResolver);
 
-            int sampleSize = calculateSampleSize(outDimens.outWidth, outDimens.outHeight, targetWidth, targetHeight);
+            int sampleSize = calculateSampleSize(outDimens.outHeight, outDimens.outWidth, targetWidth, targetHeight);
 
             bitmap = downsampleBitmap(uri, sampleSize, contentResolver);
-
+            Matrix matrix = new Matrix();
+            matrix.postRotate(90);
+            Bitmap rotadedBitmap = Bitmap.createBitmap(bitmap, 0, 0, bitmap.getWidth(), bitmap.getHeight(), matrix, true);
+            bitmap = rotadedBitmap;
         } catch (Exception e) {
             e.printStackTrace();
         }

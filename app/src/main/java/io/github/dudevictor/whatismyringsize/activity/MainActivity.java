@@ -3,11 +3,9 @@ package io.github.dudevictor.whatismyringsize.activity;
 import android.app.Activity;
 import android.content.DialogInterface;
 import android.content.Intent;
-import android.database.Cursor;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
 import android.provider.MediaStore;
 import android.support.design.widget.FloatingActionButton;
 import android.support.design.widget.NavigationView;
@@ -21,6 +19,11 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.view.View;
 
+import java.io.File;
+import java.io.IOException;
+import java.text.SimpleDateFormat;
+import java.util.Date;
+
 import io.github.dudevictor.whatismyringsize.util.PermissionRequestUtil;
 
 public class MainActivity extends AppCompatActivity
@@ -28,6 +31,8 @@ public class MainActivity extends AppCompatActivity
 
     private final Integer REQUEST_CAMERA = 0;
     private final Integer REQUEST_GALLERY = 1;
+
+    private Uri imageUri;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -115,45 +120,12 @@ public class MainActivity extends AppCompatActivity
             if (requestCode == REQUEST_GALLERY) {
                     intent.putExtra("imageUri", data.getData());
             } else if (requestCode == REQUEST_CAMERA) {
-                Bitmap bitmap = onCaptureImageResult(data);
-                intent.putExtra("image", bitmap);
+                intent.putExtra("imageUri", imageUri);
             }
             startActivity(intent);
 
 
         }
-
-
-    }
-
-    private Bitmap onSelectFromGalleryResult(Intent data) {
-        Uri selectedImage = data.getData();
-        String[] filePathColumn = { MediaStore.Images.Media.DATA };
-
-        Cursor cursor = getContentResolver().query(selectedImage,
-                filePathColumn, null, null, null);
-        cursor.moveToFirst();
-
-        int columnIndex = cursor.getColumnIndex(filePathColumn[0]);
-        String picturePath = cursor.getString(columnIndex);
-        cursor.close();
-
-        return BitmapFactory.decodeFile(picturePath);
-    }
-
-    public String getPath(Uri uri) {
-        String[] projection = { MediaStore.MediaColumns.DATA };
-        Cursor cursor = managedQuery(uri, projection, null, null, null);
-        int column_index = cursor
-                .getColumnIndexOrThrow(MediaStore.MediaColumns.DATA);
-        cursor.moveToFirst();
-
-        return cursor.getString(column_index);
-    }
-
-    private Bitmap onCaptureImageResult(Intent data) {
-        Bitmap thumbnail = (Bitmap) data.getExtras().get("data");
-        return thumbnail;
 
     }
 
@@ -194,7 +166,35 @@ public class MainActivity extends AppCompatActivity
 
         private void cameraIntent() {
             Intent intent = new Intent(MediaStore.ACTION_IMAGE_CAPTURE);
+            if (intent.resolveActivity(getPackageManager()) != null) {
+                File photoFile = null;
+                try {
+                    photoFile = createImageFile();
+                } catch (IOException ex) {
+                    ex.printStackTrace();
+                }
+                if (photoFile != null) {
+                    imageUri = Uri.fromFile(photoFile);
+                    intent.putExtra(MediaStore.EXTRA_OUTPUT,
+                            imageUri);
+                }
+            }
+
             startActivityForResult(intent, REQUEST_CAMERA);
+        }
+
+        private File createImageFile() throws IOException {
+            String timeStamp = new SimpleDateFormat("yyyyMMdd_HHmmss").format(new Date());
+            String imageFileName = "JPEG_" + timeStamp + "_";
+            File storageDir = Environment.getExternalStoragePublicDirectory(
+                    Environment.DIRECTORY_PICTURES);
+            File image = File.createTempFile(
+                    imageFileName,  /* prefix */
+                    ".jpg",         /* suffix */
+                    storageDir      /* directory */
+            );
+
+            return image;
         }
 
     }
