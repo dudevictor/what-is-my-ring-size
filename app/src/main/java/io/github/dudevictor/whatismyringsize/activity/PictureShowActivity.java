@@ -7,7 +7,11 @@ import android.support.v7.app.AppCompatActivity;
 import android.view.MotionEvent;
 import android.view.View;
 import android.widget.ImageView;
-import android.widget.Toast;
+
+import com.nostra13.universalimageloader.core.DisplayImageOptions;
+import com.nostra13.universalimageloader.core.ImageLoader;
+import com.nostra13.universalimageloader.core.ImageLoaderConfiguration;
+import com.nostra13.universalimageloader.core.assist.ImageSize;
 
 import org.opencv.android.BaseLoaderCallback;
 import org.opencv.android.OpenCVLoader;
@@ -15,32 +19,46 @@ import org.opencv.android.Utils;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfPoint;
+import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
+import org.opencv.core.Size;
 import org.opencv.imgproc.Imgproc;
 
-import io.github.dudevictor.whatismyringsize.util.ImageLoaderUtil;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Iterator;
+import java.util.List;
 
 public class PictureShowActivity extends AppCompatActivity implements
-        View.OnTouchListener{
+        View.OnTouchListener {
 
     private ImageView imgView;
-    private Mat originalImage;
+    private Mat mat;
+    private ImageLoader imageLoader;
+    private Bitmap originalPicture;
 
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
         public void onManagerConnected(int status) {
             super.onManagerConnected(status);
 
+
             Uri selectedImage = (Uri) getIntent().getExtras().get("imageUri");
-            Bitmap bitmap = ImageLoaderUtil.getDownsampledBitmap(selectedImage,
-                    imgView.getWidth(), imgView.getHeight(), getContentResolver());
-            imgView.setImageBitmap(bitmap);
 
-
-            Bitmap bmp32 = bitmap.copy(Bitmap.Config.ARGB_8888, true);
-            originalImage = new Mat();
-            Utils.bitmapToMat(bmp32, originalImage);
+            DisplayImageOptions displayImageOptions = new DisplayImageOptions.Builder().considerExifParams(true)
+                    .cacheOnDisk(true)
+                    .build();
+            originalPicture = imageLoader.loadImageSync(selectedImage.toString(),
+                    new ImageSize(imgView.getWidth(), imgView.getHeight()), displayImageOptions);
+            imgView.setImageBitmap(originalPicture);
+            imgView.setDrawingCacheEnabled(true);
+            originalPicture = Bitmap.createBitmap(imgView.getDrawingCache());
+            imgView.setDrawingCacheEnabled(false);
+            Bitmap bmp32 = originalPicture.copy(Bitmap.Config.ARGB_8888, true);
+            mat = new Mat();
+            Utils.bitmapToMat(bmp32, mat);
             imgView.setOnTouchListener(PictureShowActivity.this);
         }
     };
@@ -50,53 +68,87 @@ public class PictureShowActivity extends AppCompatActivity implements
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_picture_show);
         imgView = (ImageView) findViewById(R.id.imgView);
-
+        imageLoader = ImageLoader.getInstance();
+        imageLoader.init(ImageLoaderConfiguration.createDefault(getBaseContext()));
     }
 
     @Override
     protected void onResume() {
         super.onResume();
-        OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_1_0,this, mLoaderCallback);
+        OpenCVLoader.initAsync(OpenCVLoader.OPENCV_VERSION_3_1_0, this, mLoaderCallback);
 
     }
 
     @Override
     public boolean onTouch(View v, MotionEvent event) {
-        int cols = originalImage.cols();
-        int rows = originalImage.rows();
+        int cols = mat.cols();
+        int rows = mat.rows();
 
-        int x = (int)event.getX();
-        int y = (int)event.getY();
-
-        Toast.makeText(PictureShowActivity.this, "Touch image coordinates: (" + x + ", " + y + ")",
-                Toast.LENGTH_SHORT).show();
+        int x = (int) event.getX();
+        int y = (int) event.getY();
 
         if ((x < 0) || (y < 0) || (x > cols) || (y > rows)) return false;
 
         Rect touchedRect = new Rect();
 
-        touchedRect.x = (x>4) ? x-4 : 0;
-        touchedRect.y = (y>4) ? y-4 : 0;
+        touchedRect.x = (x > 4) ? x - 4 : 0;
+        touchedRect.y = (y > 4) ? y - 4 : 0;
 
-        touchedRect.width = (x+4 < cols) ? x + 4 - touchedRect.x : cols - touchedRect.x;
-        touchedRect.height = (y+4 < rows) ? y + 4 - touchedRect.y : rows - touchedRect.y;
+        touchedRect.width = (x + 60 < cols) ? x + 60 - touchedRect.x : cols - touchedRect.x;
+        touchedRect.height = (y + 60 < rows) ? y + 60 - touchedRect.y : rows - touchedRect.y;
 
-        Mat touchedRegionRgba = originalImage.submat(touchedRect);
+        Mat hand = findHand(x, y);
 
-        Mat touchedRegionHsv = new Mat();
-        Imgproc.cvtColor(touchedRegionRgba, touchedRegionHsv, Imgproc.COLOR_RGB2HSV_FULL);
+        // Find max contour area
+        double maxArea = 0;
+        List<MatOfPoint> contours = new ArrayList<>();
+        MatOfPoint maxContour = null;
+        Imgproc.findContours(hand, contours, new Mat(), Imgproc.RETR_EXTERNAL, Imgproc.CHAIN_APPROX_SIMPLE);
+        Iterator<MatOfPoint> each = contours.iterator();
+        while (each.hasNext()) {
+            MatOfPoint wrapper = each.next();
+            double area = Imgproc.contourArea(wrapper);
+            if (area > maxArea)
+                maxArea = area;
+                maxContour = wrapper;
+        }
 
-        Scalar mBlobColorHsv = Core.sumElems(touchedRegionHsv);
-        int pointCount = touchedRect.width*touchedRect.height;
-        for (int i = 0; i < mBlobColorHsv.val.length; i++)
-            mBlobColorHsv.val[i] /= pointCount;
 
-        Scalar mBlobColorRgba = converScalarHsv2Rgba(mBlobColorHsv);
 
-        Toast.makeText(PictureShowActivity.this, "Touched rgba color: (" + mBlobColorRgba.val[0] + ", " + mBlobColorRgba.val[1] +
-                ", " + mBlobColorRgba.val[2] + ", " + mBlobColorRgba.val[3] + ")", Toast.LENGTH_SHORT).show();
+        if (maxContour != null) {
+            Imgproc.drawContours(hand, Arrays.asList(maxContour), -1, new Scalar(255, 0, 0, 255));
+            //Imgproc.floodFill(hand, new Mat(), new Point(x, y), new Scalar(255, 255, 255));
+            /*Imgproc.cvtColor(hand, hand, Imgproc.COLOR_GRAY2RGBA);
+            Core.bitwise_and(mat, hand , hand);*/
+        }
 
+        Utils.matToBitmap(hand, originalPicture);
+
+        imgView.setImageBitmap(originalPicture);
         return false;
+    }
+
+    private Mat findHand(int x, int y) {
+        Mat hand = new Mat();
+
+        mat.copyTo(hand);
+
+        Imgproc.GaussianBlur(hand, hand, new Size(5,5), 0, 0);
+        Imgproc.medianBlur(hand, hand, 9);
+
+        Imgproc.cvtColor(hand, hand, Imgproc.COLOR_RGB2HSV_FULL);
+        Core.inRange(hand, new Scalar(0, 48, 80), new Scalar(20, 255, 255), hand);
+        Mat kernel = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_ELLIPSE, new Size(4, 4));
+        Imgproc.morphologyEx(hand, hand, Imgproc.MORPH_DILATE, kernel);
+
+        Imgproc.floodFill(hand, new Mat(), new Point(x, y), new Scalar(127, 127, 127));
+        Imgproc.floodFill(hand, new Mat(), new Point(0, 0), new Scalar(255, 255, 255));
+        Core.bitwise_not(hand, hand);
+        Imgproc.floodFill(hand, new Mat(), new Point(x, y), new Scalar(255, 255, 255));
+
+        Imgproc.morphologyEx(hand, hand, Imgproc.MORPH_OPEN, kernel);
+        Imgproc.medianBlur(hand, hand, 3);
+        return hand;
     }
 
     private Scalar converScalarHsv2Rgba(Scalar hsvColor) {
