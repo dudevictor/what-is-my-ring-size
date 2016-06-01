@@ -19,6 +19,8 @@ import org.opencv.android.Utils;
 import org.opencv.core.Core;
 import org.opencv.core.CvType;
 import org.opencv.core.Mat;
+import org.opencv.core.MatOfInt;
+import org.opencv.core.MatOfInt4;
 import org.opencv.core.MatOfPoint;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
@@ -98,7 +100,120 @@ public class PictureShowActivity extends AppCompatActivity implements
         touchedRect.height = (y + 60 < rows) ? y + 60 - touchedRect.y : rows - touchedRect.y;
 
         Mat hand = findHand(x, y);
+        MatOfPoint contours = findContours(hand);
+        MatOfInt hull = findConvexHull(contours);
+        Point[] fingers = findFingers(contours, hull);
 
+        Imgproc.drawContours(mat, Arrays.asList(contours), -1, new Scalar(0, 255, 0, 255));
+
+        //Imgproc.circle(mat, centerHand, 5, new Scalar(255, 0, 255), 1, Imgproc.LINE_AA, 0);
+        //Imgproc.circle(mat, centerHand, hand_radius, new Scalar(0, 0, 255), 1, Imgproc.LINE_AA, 0);
+
+        for (int i = 0; i < num_fingers; i++) {
+            if (fingers[i] != null) {
+                Imgproc.circle(mat, fingers[i], 10,
+                        new Scalar(255, 0, 0), 10, Imgproc.LINE_AA, 0);
+            }
+        }
+
+       /* for (int i = 0; i < deffectsPoints.length ; i++) {
+            Imgproc.circle(mat, deffectsPoints[i], 2,
+                    new Scalar(200, 200, 200), 2, Imgproc.LINE_AA, 0);
+        }*/
+
+
+
+        Utils.matToBitmap(mat, originalPicture);
+
+        imgView.setImageBitmap(originalPicture);
+        return false;
+    }
+
+    private Point[] findFingers(MatOfPoint contour, MatOfInt hull) {
+        Point fingers[] = new Point[6];
+
+        if (contour != null && hull != null) {
+            int n = (int) contour.total();
+            double dist, dist1 = 0, dist2 = 0;
+            double cx = centerHand.x;
+            double cy = centerHand.y;
+
+            Point maxPoint = new Point();
+            Point pontos[] = contour.toArray();
+
+            for (int i = 0; i < n; i++) {
+
+
+                dist = (cx - pontos[i].x) * (cx - pontos[i].x) +
+                        (cy - pontos[i].y) * (cy - pontos[i].y);
+
+                if (dist < dist1 && dist1 > dist2 && maxPoint.x != 0
+                        && maxPoint.y < originalPicture.getHeight() - 10) {
+
+                    fingers[num_fingers++] = maxPoint;
+                    if (num_fingers >= 6)
+                        break;
+                }
+
+                dist2 = dist1;
+                dist1 = dist;
+                maxPoint = pontos[i];
+            }
+
+        }
+
+        return fingers;
+
+    }
+
+    public Point centerHand;
+    public Integer hand_radius = 0;
+    public Integer num_fingers = 5;
+    public Point deffectsPoints[] = new Point[8];
+
+    private MatOfInt findConvexHull(MatOfPoint contour) {
+        if (contour == null) {
+            return null;
+        }
+
+        int x = 0, y = 0;
+        int dist = 0;
+
+        MatOfInt hull = new MatOfInt();
+        Imgproc.convexHull(contour, hull, true);
+
+        if (hull != null) {
+            MatOfInt4 defects = new MatOfInt4();
+            Imgproc.convexityDefects(contour, hull, defects);
+            int[] defects_array = defects.toArray();
+            if (defects.total() != 0L) {
+                for (int i = 0; i < defects.total() && i < 8; i++) {
+                    x += defects_array[i*4];
+                    y += defects_array[i*4 + 1];
+
+                    deffectsPoints[i] = new Point(x, y);
+                }
+
+                x /= defects.total();
+                y /= defects.total();
+                centerHand = new Point(x, y);
+                for (int i = 0; i < defects.total(); i++) {
+                    int d = (x - defects_array[i*4]) *
+                    (x - defects_array[i]) +
+                            (y - defects_array[i*4+1]) *
+                    (y - defects_array[i+1]);
+
+                    dist += Math.sqrt(d);
+                }
+                hand_radius = (int) (dist / defects.total());
+            }
+
+        }
+
+        return hull;
+    }
+
+    private MatOfPoint findContours(Mat hand) {
         // Find max contour area
         double maxArea = 0;
         List<MatOfPoint> contours = new ArrayList<>();
@@ -110,22 +225,10 @@ public class PictureShowActivity extends AppCompatActivity implements
             double area = Imgproc.contourArea(wrapper);
             if (area > maxArea)
                 maxArea = area;
-                maxContour = wrapper;
+            maxContour = wrapper;
         }
 
-
-
-        if (maxContour != null) {
-            Imgproc.drawContours(hand, Arrays.asList(maxContour), -1, new Scalar(255, 0, 0, 255));
-            //Imgproc.floodFill(hand, new Mat(), new Point(x, y), new Scalar(255, 255, 255));
-            /*Imgproc.cvtColor(hand, hand, Imgproc.COLOR_GRAY2RGBA);
-            Core.bitwise_and(mat, hand , hand);*/
-        }
-
-        Utils.matToBitmap(hand, originalPicture);
-
-        imgView.setImageBitmap(originalPicture);
-        return false;
+        return maxContour;
     }
 
     private Mat findHand(int x, int y) {
@@ -139,7 +242,7 @@ public class PictureShowActivity extends AppCompatActivity implements
         Imgproc.cvtColor(hand, hand, Imgproc.COLOR_RGB2HSV_FULL);
         Core.inRange(hand, new Scalar(0, 48, 80), new Scalar(20, 255, 255), hand);
         Mat kernel = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_ELLIPSE, new Size(4, 4));
-        Imgproc.morphologyEx(hand, hand, Imgproc.MORPH_DILATE, kernel);
+        Imgproc.morphologyEx(hand, hand, Imgproc.MORPH_OPEN, kernel);
 
         Imgproc.floodFill(hand, new Mat(), new Point(x, y), new Scalar(127, 127, 127));
         Imgproc.floodFill(hand, new Mat(), new Point(0, 0), new Scalar(255, 255, 255));
