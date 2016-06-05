@@ -22,6 +22,7 @@ import org.opencv.core.Mat;
 import org.opencv.core.MatOfInt;
 import org.opencv.core.MatOfInt4;
 import org.opencv.core.MatOfPoint;
+import org.opencv.core.MatOfPoint2f;
 import org.opencv.core.Point;
 import org.opencv.core.Rect;
 import org.opencv.core.Scalar;
@@ -30,8 +31,12 @@ import org.opencv.imgproc.Imgproc;
 
 import java.util.ArrayList;
 import java.util.Arrays;
+import java.util.Comparator;
 import java.util.Iterator;
 import java.util.List;
+import java.util.PriorityQueue;
+
+import io.github.dudevictor.whatismyringsize.util.OpencvTools;
 
 public class PictureShowActivity extends AppCompatActivity implements
         View.OnTouchListener {
@@ -102,26 +107,23 @@ public class PictureShowActivity extends AppCompatActivity implements
         Mat hand = findHand(x, y);
         MatOfPoint contours = findContours(hand);
         MatOfInt hull = findConvexHull(contours);
-        Point[] fingers = findFingers(contours, hull);
+        findFingers(contours, hull);
 
         Imgproc.drawContours(mat, Arrays.asList(contours), -1, new Scalar(0, 255, 0, 255));
+        //OpencvTools.drawDefects(mat, deffectsPoints, centerHand);
+        Imgproc.circle(mat, centerHand, 10, new Scalar(255, 0, 0, 255), -1);
 
-        //Imgproc.circle(mat, centerHand, 5, new Scalar(255, 0, 255), 1, Imgproc.LINE_AA, 0);
-        //Imgproc.circle(mat, centerHand, hand_radius, new Scalar(0, 0, 255), 1, Imgproc.LINE_AA, 0);
+        for (Point dedo : maxPointFingers) {
 
-        for (int i = 0; i < num_fingers; i++) {
-            if (fingers[i] != null) {
-                Imgproc.circle(mat, fingers[i], 10,
-                        new Scalar(255, 0, 0), 10, Imgproc.LINE_AA, 0);
-            }
+            if (dedo == null) continue;
+            Imgproc.circle(mat, dedo, 10, new Scalar(0, 0, 255, 255), -1);
         }
 
-       /* for (int i = 0; i < deffectsPoints.length ; i++) {
-            Imgproc.circle(mat, deffectsPoints[i], 2,
-                    new Scalar(200, 200, 200), 2, Imgproc.LINE_AA, 0);
-        }*/
+        for (Point dedo : minPointFingers) {
 
-
+            if (dedo == null) continue;
+            Imgproc.circle(mat, dedo, 10, new Scalar(255, 0, 255, 255), -1);
+        }
 
         Utils.matToBitmap(mat, originalPicture);
 
@@ -129,8 +131,9 @@ public class PictureShowActivity extends AppCompatActivity implements
         return false;
     }
 
-    private Point[] findFingers(MatOfPoint contour, MatOfInt hull) {
-        Point fingers[] = new Point[6];
+    private void findFingers(MatOfPoint contour, MatOfInt hull) {
+        List<Point> localMaxPointFingers = new ArrayList<>();
+        minPointFingers = new ArrayList<>();
 
         if (contour != null && hull != null) {
             int n = (int) contour.total();
@@ -150,8 +153,16 @@ public class PictureShowActivity extends AppCompatActivity implements
                 if (dist < dist1 && dist1 > dist2 && maxPoint.x != 0
                         && maxPoint.y < originalPicture.getHeight() - 10) {
 
-                    fingers[num_fingers++] = maxPoint;
-                    if (num_fingers >= 6)
+                    localMaxPointFingers.add(new Point(maxPoint.x, maxPoint.y));
+
+                    if (localMaxPointFingers.size() >= 10)
+                        break;
+                }
+
+                if (dist > dist1 && dist1 < dist2 && maxPoint.x != 0) {
+
+                    minPointFingers.add(new Point(maxPoint.x, maxPoint.y));
+                    if (minPointFingers.size() >= 10)
                         break;
                 }
 
@@ -160,57 +171,96 @@ public class PictureShowActivity extends AppCompatActivity implements
                 maxPoint = pontos[i];
             }
 
-        }
+            PriorityQueue<Point> dedos = new PriorityQueue<>(5, new Comparator<Point>() {
+                @Override
+                public int compare(Point lhs, Point rhs) {
+                    Double minLhs1 = Double.MAX_VALUE, minLhs2 = Double.MAX_VALUE,
+                            minRhs1 = Double.MAX_VALUE, minRhs2 = Double.MAX_VALUE;
 
-        return fingers;
+                    for (Point min : minPointFingers) {
+                        double min1 = OpencvTools.getDistanceBetweenPoints(lhs, min);
+                        double min2 = OpencvTools.getDistanceBetweenPoints(rhs, min);
+
+                        if (min1 < minLhs1) {
+                            minLhs1 = min1;
+                        } else if (min1 < minLhs2) {
+                            minLhs2 = min1;
+                        }
+
+                        if (min2 < minRhs1) {
+                            minRhs1 = min2;
+                        } else if (min2 < minRhs2) {
+                            minRhs2 = min2;
+                        }
+
+                    }
+
+                    if (minLhs1 + minLhs2 - minRhs1 - minRhs2 > 0) {
+                        return 1;
+                    } else {
+                        return -1;
+                    }
+                }
+            });
+
+            dedos.addAll(localMaxPointFingers);
+            maxPointFingers = new ArrayList<>();
+            int size = dedos.size();
+            for (int i = 0; i < 5 && i < size; i++) {
+                maxPointFingers.add(dedos.poll());
+            }
+
+        }
 
     }
 
     public Point centerHand;
-    public Integer hand_radius = 0;
-    public Integer num_fingers = 5;
-    public Point deffectsPoints[] = new Point[8];
+    public List<Point[]> deffectsPoints;
+    public List<Point> maxPointFingers;
+    public List<Point>  minPointFingers;
 
     private MatOfInt findConvexHull(MatOfPoint contour) {
         if (contour == null) {
             return null;
         }
 
-        int x = 0, y = 0;
-        int dist = 0;
-
         MatOfInt hull = new MatOfInt();
         Imgproc.convexHull(contour, hull, true);
+        centerHand = OpencvTools.getCentroid(contour);
 
         if (hull != null) {
             MatOfInt4 defects = new MatOfInt4();
             Imgproc.convexityDefects(contour, hull, defects);
-            int[] defects_array = defects.toArray();
-            if (defects.total() != 0L) {
-                for (int i = 0; i < defects.total() && i < 8; i++) {
-                    x += defects_array[i*4];
-                    y += defects_array[i*4 + 1];
 
-                    deffectsPoints[i] = new Point(x, y);
-                }
-
-                x /= defects.total();
-                y /= defects.total();
-                centerHand = new Point(x, y);
-                for (int i = 0; i < defects.total(); i++) {
-                    int d = (x - defects_array[i*4]) *
-                    (x - defects_array[i]) +
-                            (y - defects_array[i*4+1]) *
-                    (y - defects_array[i+1]);
-
-                    dist += Math.sqrt(d);
-                }
-                hand_radius = (int) (dist / defects.total());
-            }
+            deffectsPoints = filterDefects(defects, contour);
 
         }
 
         return hull;
+    }
+
+    private List<Point[]> filterDefects(MatOfInt4 convexityDefects, MatOfPoint handContour){
+        List<Point[]> finalDefects = new ArrayList<Point[]>();
+
+        int defects[] = convexityDefects.toArray();
+        List<Point> contour = handContour.toList();
+        Point centroid = OpencvTools.getCentroid(handContour);
+		/*
+		 * convexityDefects -> structure containing (by order) start, end, depth_point, depth.
+		 */
+        Point start;
+        //		Point end;
+        Point farthest;
+        //		float depth;
+        for (int i = 0; i < defects.length; i = i + 4) {
+            start = contour.get(defects[i]);
+            farthest = contour.get(defects[i + 2]);
+            Point[] points = new Point[2];
+            points[0] = start;
+            points[1] = farthest;
+            finalDefects.add(points);
+        }
+        return finalDefects;
     }
 
     private MatOfPoint findContours(Mat hand) {
@@ -222,10 +272,21 @@ public class PictureShowActivity extends AppCompatActivity implements
         Iterator<MatOfPoint> each = contours.iterator();
         while (each.hasNext()) {
             MatOfPoint wrapper = each.next();
-            double area = Imgproc.contourArea(wrapper);
-            if (area > maxArea)
+            double area = Math.abs(Imgproc.contourArea(wrapper));
+            if (area > maxArea) {
                 maxArea = area;
-            maxContour = wrapper;
+                maxContour = wrapper;
+            }
+        }
+
+        if (maxContour != null) {
+            MatOfPoint2f maxContour2f = new MatOfPoint2f();
+            MatOfPoint2f approxPoly = new MatOfPoint2f();
+            maxContour.convertTo(maxContour2f, CvType.CV_32FC2);
+
+            Imgproc.approxPolyDP(maxContour2f, approxPoly, 2, true);
+            approxPoly.convertTo(maxContour, CvType.CV_32S);
+
         }
 
         return maxContour;
@@ -233,32 +294,28 @@ public class PictureShowActivity extends AppCompatActivity implements
 
     private Mat findHand(int x, int y) {
         Mat hand = new Mat();
-
         mat.copyTo(hand);
-
-        Imgproc.GaussianBlur(hand, hand, new Size(5,5), 0, 0);
-        Imgproc.medianBlur(hand, hand, 9);
-
         Imgproc.cvtColor(hand, hand, Imgproc.COLOR_RGB2HSV_FULL);
-        Core.inRange(hand, new Scalar(0, 48, 80), new Scalar(20, 255, 255), hand);
-        Mat kernel = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_ELLIPSE, new Size(4, 4));
-        Imgproc.morphologyEx(hand, hand, Imgproc.MORPH_OPEN, kernel);
+        Imgproc.GaussianBlur(hand, hand, new Size(3,3), 0, 0);
 
-        Imgproc.floodFill(hand, new Mat(), new Point(x, y), new Scalar(127, 127, 127));
-        Imgproc.floodFill(hand, new Mat(), new Point(0, 0), new Scalar(255, 255, 255));
-        Core.bitwise_not(hand, hand);
-        Imgproc.floodFill(hand, new Mat(), new Point(x, y), new Scalar(255, 255, 255));
+        Mat frame_gray = new Mat();
+        Core.inRange(hand, new Scalar(0, 48, 80), new Scalar(20, 255, 255), frame_gray);
 
-        Imgproc.morphologyEx(hand, hand, Imgproc.MORPH_OPEN, kernel);
-        Imgproc.medianBlur(hand, hand, 3);
-        return hand;
-    }
+        Imgproc.threshold(frame_gray, frame_gray, 60, 255, Imgproc.THRESH_BINARY);
 
-    private Scalar converScalarHsv2Rgba(Scalar hsvColor) {
-        Mat pointMatRgba = new Mat();
-        Mat pointMatHsv = new Mat(1, 1, CvType.CV_8UC3, hsvColor);
-        Imgproc.cvtColor(pointMatHsv, pointMatRgba, Imgproc.COLOR_HSV2RGB_FULL, 4);
+        Mat kernel = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_ELLIPSE, new Size(3, 3));
+        Imgproc.morphologyEx(frame_gray, frame_gray, Imgproc.MORPH_ERODE,kernel);
+        kernel = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_ELLIPSE, new Size(7, 7));
+        Imgproc.morphologyEx(frame_gray, frame_gray, Imgproc.MORPH_OPEN,kernel);
+        kernel = Imgproc.getStructuringElement(Imgproc.CV_SHAPE_ELLIPSE, new Size(7, 7));
+        Imgproc.morphologyEx(frame_gray, frame_gray, Imgproc.MORPH_CLOSE,kernel);
+        Imgproc.medianBlur(frame_gray, frame_gray, 15);
 
-        return new Scalar(pointMatRgba.get(0, 0));
+        Imgproc.floodFill(frame_gray, new Mat(), new Point(x, y), new Scalar(127, 127, 127));
+        Imgproc.floodFill(frame_gray, new Mat(), new Point(0, 0), new Scalar(255, 255, 255));
+        Core.bitwise_not(frame_gray, frame_gray);
+        Imgproc.floodFill(frame_gray, new Mat(), new Point(x, y), new Scalar(255, 255, 255));
+
+        return frame_gray;
     }
 }
